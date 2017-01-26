@@ -1,8 +1,6 @@
-# Crossword
+# Crossword.rb
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/crossword`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Crossword.rb is a ruby library for quick and easy crossword puzzle generation. It uses a branch and bound algorithm to quickly create compact and challenging puzzles. This library is still in the early stages of development. Contributions are welcome.
 
 ## Installation
 
@@ -22,7 +20,17 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```
+puzzle = Crossword::Puzzle.new({word: 'The clue text to display here', next: 'Clue text for next word, etc'})
+pdf = puzzle.generate_pdf # generates a pdf of the entire document
+png = puzzle.generate_png # generates a png image of the crossword part
+clues = puzzle.clue_text # returns the text used in the clues (including newlines)
+word_bank = puzzle.word_bank # returns an array of all of the words in the puzzle
+```
+
+## Pdf options
+
+TODO - fill out this section once the pdf generation code is done.
 
 ## Development
 
