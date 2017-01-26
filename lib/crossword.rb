@@ -1,10 +1,12 @@
+require "crossword/version"
 require 'pqueue'
 require 'set'
 
 module Crossword
   class Puzzle
+    attr_accessor :board
     def initialize(words)
-      board = generate_branch_and_bound(words)
+      @board = generate_branch_and_bound(words)
     end
 
     private
@@ -12,7 +14,7 @@ module Crossword
         best_solution_so_far = Float::INFINITY
         best_board = nil
         initial_board_possibilities = words.map { |word, clue| [Board.new.place_word(word, 0, 0, 'across'), down_board = Board.new.place_word(word, 0, 0, 'down')]}.flatten.map{|board| BoardWrapper.new(board, words.keys)}
-        possible_boards = Pqueue.new(initial_board_possibilities) { |a,b| a.minimum_projected_board_size < b.minimum_projected_board_size }
+        possible_boards = PQueue.new(initial_board_possibilities) { |a,b| a.minimum_projected_board_size < b.minimum_projected_board_size }
         until possible_boards.empty? do
           current_board = possible_boards.pop
           if current_board.complete?
@@ -26,20 +28,22 @@ module Crossword
             end
           end
         end
+        return best_board
       end
   end
 
   class BoardWrapper
     def initialize(board, all_words)
       @board = board
-      @unplaced_words = Set.new(all_words) - Set.new(board.locations.keys)
+      @unplaced_words = Set.new(all_words) - Set.new(board.locations.map{|w| w[:word]})
+      @all_words = all_words
     end
 
     def generate_possible_sub_boards
       @unplaced_words.each_with_object([]) do |word, generated_boards|
-        locations_for_word = board.find_possible_locations(word)
-        locations_for_word.each do |location_pair|
-          generated_boards << BoardWrapper.new(board.clone.place_word(word, location[:x], location[:y], location[:direction]))
+        locations_for_word = @board.find_possible_locations(word)
+        locations_for_word.each do |location|
+          generated_boards << BoardWrapper.new(@board.clone.place_word(word, location[:x], location[:y], location[:direction]), @all_words)
         end
       end
     end
@@ -77,15 +81,15 @@ module Crossword
       @rightmost_point = @words.empty? ? -Float::INFINITY : @words.map(&:rightmost_point).max
       @highest_point = @words.empty? ? -Float::INFINITY : @words.map(&:highest_point).max
       @leftmost_point = @words.empty? ? Float::INFINITY : @words.map(&:leftmost_point).min
-      @lowest_point = @words.empty? ? Float::INFINITY : @words.map(&:leftmost_point).min
+      @lowest_point = @words.empty? ? Float::INFINITY : @words.map(&:lowest_point).min
     end
 
     def width
-      @rightmost_point - @leftmost_point
+      @rightmost_point - @leftmost_point + 1
     end
 
     def height
-      @highest_point - @lowest_point
+      @highest_point - @lowest_point + 1
     end
 
     def number_of_squares
@@ -109,6 +113,10 @@ module Crossword
       self
     end
 
+    def get_words
+      @words
+    end
+
     def words
       @words.map(&:value)
     end
@@ -122,7 +130,7 @@ module Crossword
     end
 
     def minimum_projected_board_size(words_to_add)
-      number_of_squares + words_to_add.reduce(&:<<).length/2
+      number_of_squares + (words_to_add.map(&:length).reduce(&:+) || 0)/2
     end
 
     def clone
@@ -131,12 +139,12 @@ module Crossword
 
     private
       def find_intersections(word)
-        letters = Set.new(word.chars)
+        letters = Set.new(word.to_s.chars)
         intersecting_indices = []
         @words.each do |board_word|
-          board_word.chars.each_with_index do |letter, index|
+          board_word.value.to_s.chars.each_with_index do |letter, index|
             if letters.include?(letter)
-              indices_within_word = word.chars.each_with_index{|word_letter, word_index| [word_letter, word_index]}.select{|array| array[0] == letter}.map(&:second)
+              indices_within_word = word.to_s.chars.each_with_index.map{|word_letter, word_index| [word_letter, word_index]}.select{|array| array[0] == letter}.map{|a| a[1]}
               intersection_index = board_word.coordinates_at_index(index)
               # and now we need to find what the word starting indices and direction would be for each possible intersection
               indices_within_word.each do |word_index|
@@ -153,7 +161,7 @@ module Crossword
 
       def eliminate_bad_locations(word, locations)
         locations.reject do |possible_location|
-          @words.any?{|word| word.conflicts_with?(word, possible_location)}
+          @words.any?{|board_word| board_word.conflicts_with?(word, possible_location)}
         end
       end
 
@@ -172,7 +180,7 @@ module Crossword
         end
 
         def rightmost_point
-          self.across? ? @x + @value.length : @x
+          self.across? ? @x + @value.length - 1 : @x
         end
 
         def highest_point
@@ -180,7 +188,7 @@ module Crossword
         end
 
         def lowest_point
-          self.across? ? @y : @y - @value.length
+          self.across? ? @y : @y - @value.length + 1
         end
 
         def across?
@@ -192,12 +200,13 @@ module Crossword
         end
 
         def intersects?(word)
-          if @direction == word.direction 
+          if @direction == word.direction
+            puts "Words run parallel to each other"
             false
           elsif self.across?
-            leftmost_point < word.leftmost_point && rightmost_point > word.rightmost_point && highest_point < word.highest_point && lowest_point > word.lowest_point
+            leftmost_point <= word.leftmost_point && rightmost_point >= word.rightmost_point && highest_point <= word.highest_point && lowest_point >= word.lowest_point
           else
-            leftmost_point > word.leftmost_point && rightmost_point < word.rightmost_point && highest_point > word.highest_point && lowest_point < word.lowest_point
+            leftmost_point >= word.leftmost_point && rightmost_point <= word.rightmost_point && highest_point >= word.highest_point && lowest_point <= word.lowest_point
           end  
         end
 
